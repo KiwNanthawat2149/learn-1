@@ -1,1 +1,279 @@
-kiw
+A) เขียน 4 test cases ของ intersect 
+
+ต้องระบุ receiver, argument, expected result และ “subdomain” ให้ไม่ซ้ำกัน
+
+ผมแบ่ง subdomain ตาม “ลักษณะการตัดกัน” ได้ 4 แบบที่ไม่ซ้ำ:
+
+TC1: ซ้อนทับกันบางส่วน (overlap, ไม่ว่าง)
+
+Receiver: I1 = [1, 5]
+
+Argument: I2 = [3, 8]
+
+Expected: [3, 5]
+
+Subdomain: ทั้งคู่ไม่ว่าง และช่วงทับกันแบบ “กว้าง > 0”
+
+TC2: หนึ่งช่วงครอบอีกช่วง (containment)
+
+Receiver: I1 = [1, 10]
+
+Argument: I2 = [3, 4]
+
+Expected: [3, 4]
+
+Subdomain: ทั้งคู่ไม่ว่าง และ “I2 อยู่ใน I1 ทั้งหมด”
+
+TC3: แตะกันพอดีที่จุดเดียว (touching at boundary)
+
+Receiver: I1 = [1, 3]
+
+Argument: I2 = [3, 7]
+
+Expected: [3, 3] (เหลือสมาชิกเดียวคือ 3)
+
+Subdomain: ทั้งคู่ไม่ว่าง และจุดตัดเป็น “จุดเดียว”
+
+TC4: ไม่ทับกันเลย → ได้ช่วงว่าง (disjoint → empty)
+
+Receiver: I1 = [1, 2]
+
+Argument: I2 = [5, 6]
+
+Expected: [5, 2] (เพราะ max=5, min=2 ⇒ lb>rb ⇒ empty)
+
+Subdomain: ทั้งคู่ไม่ว่าง แต่ “แยกจากกัน” (ไม่มี intersection)
+
+
+
+B) Override equals ให้ถูกต้อง 
+
+แนวคิดที่ “ถูกต้องตาม abstract value” คือ เท่ากันถ้าแทน “เซตของจำนวนเต็ม” เดียวกัน
+ดังนั้น ช่วงว่างทุกแบบต้องเท่ากันหมด (แม้ lb,rb ต่างกัน แต่แทน ∅ เหมือนกัน)
+
+@Override
+public boolean equals(Object o) {
+    if (!(o instanceof Interval i)) return false;
+
+    boolean e1 = this.isEmpty();
+    boolean e2 = i.isEmpty();
+
+    if (e1 && e2) return true;          // ช่วงว่างเท่ากันหมด
+    if (e1 || e2) return false;         // ว่างกับไม่ว่างไม่เท่ากัน
+
+    return this.lb == i.smallestElem() && this.rb == i.largestElem();
+}
+
+
+
+C) Override hashCode ให้เหมาะสม 
+
+ต้อง สอดคล้องกับ equals:
+
+ถ้า empty เหมือนกันทุกอัน ⇒ hash ต้อง “เหมือนกัน” ด้วย (ใช้ค่าคงที่ได้)
+
+ถ้าไม่ empty ใช้ lb, rb มารวม
+
+@Override
+public int hashCode() {
+    if (this.isEmpty()) return 0;
+    int result = 17;
+    result = 31 * result + lb;
+    result = 31 * result + rb;
+    return result;
+}
+
+
+
+Grammar:
+
+S → S + T | T
+
+T → T * F | F
+
+F → U ^ F | U (ทำให้ ^ เป็น right-associative)
+
+U → -A | A
+
+A → n | (S) (n เป็นจำนวนเต็มบวก)
+
+Expression: 2^-3 + 5^4^7 * 8
+
+
+
+AA) วาด parse-tree
+
+สรุปโครงสร้างตาม grammar (เขียนเป็นต้นไม้แบบย่อ อ่านง่าย):
+
+S
+
+S + T
+
+ซ้าย S → T → F = 2^-3
+
+F → U ^ F
+
+U → A → n(2)
+
+F → U (เพราะ exponent เป็นแค่ U)
+
+U → -A → -n(3)
+
+ขวา T = 5^4^7 * 8
+
+T → T * F
+
+ซ้าย T → F = 5^4^7
+
+F → U ^ F
+
+U → A → n(5)
+
+F (ขวาของ ^) = 4^7
+
+F → U ^ F
+
+U → A → n(4)
+
+F → U → A → n(7)
+
+ขวา F → U → A → n(8)
+
+
+BB) วาด AST AST จะเหลือแต่ “ตัวดำเนินการ” และ “ตัวถูกดำเนินการ”:
+
+        (+)
+       /   \
+     (^)   (*)
+    /  \   /  \
+   2  (-) (^)  8
+      |   / \
+      3  5  (^)
+            / \
+           4   7
+
+
+เขียนเป็นฟังก์ชันก็ได้:
+
++( ^(2, -(3)) , *( ^(5, ^(4,7)) , 8 ) )
+
+
+CC) Syntax errors ควรเป็นอะไร 
+ควรเป็น unchecked exception (RuntimeException) มากที่สุด
+เหตุผล: syntax error เป็น “ความผิดพลาดของอินพุต/ผู้ใช้” 
+ไม่ใช่สภาวะที่โปรแกรมจะกู้ได้แบบจำเป็นต้องบังคับ catch ทุกครั้ง 
+และไม่ใช่ระดับ JVM-fatal แบบ Error
+
+
+
+DD) tokenizer เห็น interfaceName ควรคืน token ไหน
+
+ควรคืนเป็น (3) identifier interfaceName
+
+เหตุผล: tokenizer ของภาษาแบบ Java จะให้ keyword ก็ต่อเมื่อ “ตรงทั้งคำ” (exact match)
+interfaceName ไม่ได้เท่ากับ interface (เป็นแค่ prefix) และไม่ถูกตัดคำด้วย whitespace/สัญลักษณ์ จึงต้องเป็น identifier ทั้งก้อน
+
+
+
+3) Representation invariants & Abstraction function
+
+อ้างอิง BoundaryInterval จากข้อ AAA: private int lb, rb;
+
+AAA) Representation value space 
+
+เป็นเซตของค่าที่ “ตัวแทนภายใน” ทำได้ทั้งหมด:
+
+RepSpace = { (lb, rb) | lb ∈ int, rb ∈ int }
+
+(รวมกรณี lb > rb ด้วย)
+
+BBB) Abstract value space 
+
+เป็นเซตของ “ความหมายเชิงนามธรรม” ของ interval:
+
+AbsSpace = { {x ∈ ℤ | a ≤ x ≤ b} | a,b ∈ ℤ และ a ≤ b } ∪ { ∅ }
+
+CCC) Representation invariant 
+
+เพราะดีไซน์นี้ใช้ lb > rb แทน empty ได้ จึง ไม่ต้องบังคับ lb ≤ rb
+
+RI: lb และ rb เป็นค่า int ที่ถูกต้อง (ซึ่งเป็นจริงเสมอใน Java)
+
+เขียนสั้น ๆ: RI = true (ทุกคู่ (lb,rb) ใช้ได้)
+
+DDD) Abstraction function 
+
+นิยามฟังก์ชันจาก rep → abstract:
+
+ถ้า lb ≤ rb : AF(lb,rb) = { x ∈ ℤ | lb ≤ x ≤ rb }
+
+ถ้า lb > rb : AF(lb,rb) = ∅
+
+3.1) ออกแบบ object “สามเหลี่ยมหน้าจั่ว” (ไม่สนใจตำแหน่ง/การหมุน)
+
+เพราะไม่สนใจตำแหน่ง/การหมุน ⇒ สามเหลี่ยมถูกกำหนดด้วย “ความยาวด้าน” เท่านั้น
+สามเหลี่ยมหน้าจั่วกำหนดได้ด้วย: s = ความยาวด้านที่เท่ากัน (2 ด้าน) b = ความยาวฐาน
+
+EEE) Representation value space ของเรา 
+
+เลือกแทนด้วย (s, b) เป็นจำนวนจริงบวก (เช่น double)
+
+RepSpaceTriangle = { (s, b) | s ∈ ℝ, b ∈ ℝ }
+
+(นี่คือ “พื้นที่ค่าที่เก็บได้” ก่อนใส่เงื่อนไข RI)
+
+FFF) Representation invariant ของเรา 
+
+ต้องเป็น “สามเหลี่ยมหน้าจั่วที่เป็นไปได้จริง”: s > 0 b > 0
+
+กฎสามเหลี่ยม: b < 2s (เพราะ s+s > b)
+
+(ถ้าใช้ double เพิ่มได้: s,b ต้องเป็น finite ไม่ใช่ NaN)
+
+GGG) Abstraction function ของเรา 
+
+แปลง (s,b) ไปเป็น “คลาสของสามเหลี่ยมหน้าจั่ว” ที่มีด้าน (s,s,b):
+
+ถ้า RI เป็นจริง:AF(s,b) = รูปสามเหลี่ยมหน้าจั่วทั้งหมดที่ มีความยาวด้านเท่ากัน = s และฐาน = b
+(ซึ่งเท่ากับ “รูปเดียวกันเชิงนามธรรม” เพราะไม่สนใจการเลื่อน/หมุน)
+
+ถ้า RI ไม่จริง: โดยปกติ “ไม่อนุญาตให้เกิด” (เป็น rep ที่ผิด)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
